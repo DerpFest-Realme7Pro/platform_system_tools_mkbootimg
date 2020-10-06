@@ -88,7 +88,7 @@ def write_vendor_boot_header(args):
     args.vendor_boot.write(pack('8s', BOOT_MAGIC))
     args.vendor_boot.write(pack(
         '5I',
-        args.header_version,                            # version of header
+        max(args.header_version, filesize(args.dt)),    # version of header  or dt size in bytes
         args.pagesize,                                  # flash page size we assume
         args.base + args.kernel_offset,                 # kernel physical load addr
         args.base + args.ramdisk_offset,                # ramdisk physical load addr
@@ -135,6 +135,7 @@ def write_header(args):
     update_sha(sha, args.kernel)
     update_sha(sha, args.ramdisk)
     update_sha(sha, args.second)
+    update_sha(sha, args.dt)
 
     if args.header_version > 0:
         update_sha(sha, args.recovery_dtbo)
@@ -263,17 +264,22 @@ def parse_cmdline():
                         action='store_true')
     parser.add_argument('--header_version', help='boot image header version', type=parse_int,
                         default=0)
+    parser.add_argument('--dt', help='path to the device tree image', type=FileType('rb'))
     parser.add_argument('-o', '--output', help='output file name', type=FileType('wb'))
     parser.add_argument('--vendor_boot', help='vendor boot output file name', type=FileType('wb'))
     parser.add_argument('--vendor_ramdisk', help='path to the vendor ramdisk', type=FileType('rb'))
 
-    return parser.parse_args()
+    args = parser.parse_args()
+    if args.header_version > 0 and args.dt != None:
+        raise ValueError('header_version and dt cannot be set at the same time')
 
+    return args
 
 def write_data(args, pagesize):
     write_padded_file(args.output, args.kernel, pagesize)
     write_padded_file(args.output, args.ramdisk, pagesize)
     write_padded_file(args.output, args.second, pagesize)
+    write_padded_file(args.output, args.dt, args.pagesize)
 
     if args.header_version > 0 and args.header_version < 3:
         write_padded_file(args.output, args.recovery_dtbo, pagesize)
